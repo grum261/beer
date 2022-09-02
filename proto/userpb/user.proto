@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package proto.user;
+
+import "proto/google/api/annotations.proto";
+
+option go_package = "github.com/grum261/beer/proto/userpb";
+
+message User {
+    string username = 1;
+    string password = 2;
+    string email = 3;
+}
+
+message CreateUserRequest {
+    User user = 1;
+}
+
+message AuthUserRequest {
+    User user = 1;
+}
+
+message AuthUserResponse {
+    string access_token = 1;
+}
+
+message CreateUserResponse {
+    int32 id = 1;
+}
+
+message FriendRequest {
+    int32 receiver_id = 1;
+}
+
+message FriendResponse {
+    bool is_sended = 1;
+}
+
+service UserDeliveryService {
+    rpc CreateUserHandler(CreateUserRequest) returns (CreateUserResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/users",
+            body: "user"
+        };
+    }
+    rpc AuthUserHandler(AuthUserRequest) returns (AuthUserResponse) {
+        option (google.api.http) = {
+            put: "/api/v1/users/auth"
+            body: "user"
+        };
+    }
+    rpc SendFriendRequestHandler(FriendRequest) returns (FriendResponse) {
+        option (google.api.http) = {
+            put: "/api/v1/users/{receiver_id}/friends"
+        };
+    }
+}
