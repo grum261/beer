@@ -11,12 +11,14 @@ import (
 )
 
 type UserRepository struct {
-	q *postgres.Queries
+	q *postgres.UserQueries
 }
 
 func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{
-		q: postgres.NewQueries(pool),
+		q: &postgres.UserQueries{
+			Queries: postgres.NewQueries(pool),
+		},
 	}
 }
 
@@ -52,5 +54,14 @@ func (u *UserRepository) UpdateFriendStatus(
 	senderID, receiverID int,
 	status models.RequestStatus,
 ) error {
-	return nil
+	if err := status.Validate(); err != nil {
+		return errors.Wrap(err, "service.UpdateFriendRequest")
+	}
+
+	// TODO: rework to inert on conflict do update
+	if status == models.StatusSent {
+		return u.q.InsertFriendRequest(ctx, senderID, receiverID)
+	}
+
+	return u.q.UpdateFriendRequest(ctx, senderID, receiverID, status)
 }

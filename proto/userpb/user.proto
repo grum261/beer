@@ -3,46 +3,103 @@ syntax = "proto3";
 package proto.user;
 
 import "proto/google/api/annotations.proto";
+import "proto/google/protobuf/empty.proto";
+import "proto/google/type/datetime.proto";
 
 option go_package = "github.com/grum261/beer/proto/userpb";
 
-message User {
+message AuthUser {
     string username = 1;
     string password = 2;
     string email = 3;
 }
 
-message CreateUserRequest {
-    User user = 1;
+message AuthUserRequest {
+    AuthUser user = 1;
 }
 
-message AuthUserRequest {
-    User user = 1;
+message UserFriend {
+    int32 id = 1;
+    string username = 2;
+    string avatar = 3;
+    google.type.DateTime friends_since = 4;
+    int32 posts_count = 5;
+}
+
+message ActiveFriendRequest {
+    int32 id = 1;
+    string username = 2;
+    string avatar = 3;
+    google.type.DateTime sent_at = 4;
+    int32 total_posts = 5;
+    repeated BeerMinimized latest_beers = 6;
+    repeated BeerMinimized favorite_beers = 7;
+    repeated FavoriteBreweries favorite_breweries = 8;
+}
+
+message BestBeer {
+    int32 id = 1;
+    string name = 2;
+    float avg_score = 3; 
+}
+
+message Brewery {
+    int32 id = 1;
+    string name = 2;
+}
+
+message BeerMinimized {
+    int32 id = 1;
+    string name = 2;
+    int32 score = 3;
+    Brewery brewery = 4;
+}
+
+message FavoriteBreweries {
+    int32 id = 1;
+    string name = 2;
+    int32 beers_tasted = 3;
+    float avg_score = 4;
+    BestBeer best_beer = 5;
 }
 
 message AuthUserResponse {
     string access_token = 1;
 }
 
-message CreateUserResponse {
-    int32 id = 1;
+enum RequestStatus {
+    STATUS_DECLINED = 0;
+    STATUS_ACCEPTED = 1;
 }
 
 message FriendRequest {
     int32 receiver_id = 1;
 }
 
+message UpdateFriendRequest {
+    int32 receiver_id = 1;
+    RequestStatus status = 2;
+}
+
 message FriendResponse {
     bool is_sended = 1;
 }
 
+message UserFriendsRequest {
+    int32 user_id = 1;
+}
+
+message UserFriendsResponse {
+    int32 total = 1;
+    repeated UserFriend friends = 2;
+}
+
+message FriendsRequests {
+    int32 total = 1;
+    repeated UserFriend requests = 2;
+}
+
 service UserDeliveryService {
-    rpc CreateUserHandler(CreateUserRequest) returns (CreateUserResponse) {
-        option (google.api.http) = {
-            post: "/api/v1/users",
-            body: "user"
-        };
-    }
     rpc AuthUserHandler(AuthUserRequest) returns (AuthUserResponse) {
         option (google.api.http) = {
             put: "/api/v1/users/auth"
@@ -51,7 +108,18 @@ service UserDeliveryService {
     }
     rpc SendFriendRequestHandler(FriendRequest) returns (FriendResponse) {
         option (google.api.http) = {
+            post: "/api/v1/users/{receiver_id}/friends"
+        };
+    }
+    rpc UpdateFriendRequestHandler(UpdateFriendRequest) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
             put: "/api/v1/users/{receiver_id}/friends"
+            body: "status"
+        };
+    }
+    rpc GetUserFriends(UserFriendsRequest) returns (UserFriendsResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/users/{user_id}/friends"
         };
     }
 }

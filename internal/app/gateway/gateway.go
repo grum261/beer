@@ -9,7 +9,13 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grum261/beer/configs"
+	v1 "github.com/grum261/beer/internal/delivery/http/v1"
+	"github.com/grum261/beer/internal/repository"
+	"github.com/grum261/beer/internal/service"
 	"github.com/grum261/beer/proto/userpb"
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -30,12 +36,33 @@ func Run(ctx context.Context) error {
 		return errors.Wrap(err, "gateway.Run: failed to create logger")
 	}
 
+	pool, err := pgxpool.Connect(ctxSig, cfg.DB.String())
+	if err != nil {
+		return errors.Wrap(err, "grpcserver.Run: failed to connect to db")
+	}
+
+	userRepo := repository.NewUserRepository(pool)
+	userSvc := service.NewUserService(userRepo, cfg.Argon2)
+
 	cc, err := grpc.DialContext(ctxSig, cfg.GRPC.ServerPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return errors.Wrap(err, "gateway.Run: failed to create grpc client connection")
 	}
 
 	gwMux := runtime.NewServeMux()
+
+	m, err := minio.New(cfg.Minio.Endpoint, &minio.Options{
+		Creds: credentials.NewStaticV4(cfg.Minio.AccessKey, cfg.Minio.SecretAccessKey, ""),
+	})
+	if err != nil {
+		return errors.Wrap(err, "gateway.Run: failed to connect to minio")
+	}
+
+	userHandler := v1.NewUserHandler(userSvc, m, cfg.JWT, cfg.File.MaxSize)
+
+	if err = v1.RegisterRoutes(gwMux, userHandler); err != nil {
+		return errors.Wrap(err, "gateway.Run: failed to register http routes")
+	}
 
 	err = userpb.RegisterUserDeliveryServiceHandler(ctxSig, gwMux, cc)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/go-playground/validator/v10"
 	"github.com/grum261/beer/configs"
 	"github.com/grum261/beer/internal/models"
@@ -27,7 +26,6 @@ type User struct {
 	repo UserRepository
 	v    *validator.Validate
 	cfg  configs.Argon2Config
-	p    *kafka.Producer
 }
 
 func NewUserService(repo UserRepository, cfg configs.Argon2Config) *User {

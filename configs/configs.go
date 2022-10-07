@@ -35,6 +35,12 @@ type GRPCConfig struct {
 	GatewayPort string `env:"GATEWAY_PORT" default:":8001"`
 }
 
+type MinioConfig struct {
+	Endpoint        string `env:"ENDPOINT"`
+	AccessKey       string `env:"ACCESS_KEY"`
+	SecretAccessKey string `env:"SECRET_ACCESS_KEY"`
+}
+
 type FileConfig struct {
 	MaxSize int64 `env:"MAX_SIZE" default:"1048576"`
 }
@@ -45,6 +51,7 @@ type Config struct {
 	JWT    JWTConfig    `env:"JWT"`
 	GRPC   GRPCConfig   `env:"GRPC"`
 	File   FileConfig   `env:"FILE"`
+	Minio  MinioConfig  `env:"MINIO"`
 }
 
 type flags struct {

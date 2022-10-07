@@ -3,8 +3,6 @@ package grpc
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -15,10 +13,10 @@ import (
 	"github.com/grum261/beer/proto/userpb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type UserService interface {
-	CreateUser(ctx context.Context, p models.UserCreateParams) (int, error)
 	AuthUser(ctx context.Context, p models.UserAuthParams) (int, bool, error)
 	SendFriendRequest(ctx context.Context, senderID, receiverID int) error
 	AcceptFriendRequest(ctx context.Context, senderID, receiverID int) error
@@ -36,28 +34,6 @@ func NewUserDelivery(svc UserService, jwtConfig configs.JWTConfig) *UserDelivery
 		svc:    svc,
 		jwtCfg: jwtConfig,
 	}
-}
-
-func (u *UserDelivery) CreateUserWithAvatar(w http.ResponseWriter, r *http.Request, params map[string]string) {
-	fmt.Println(r.Context().Value(tokenKey{}))
-}
-
-func (u *UserDelivery) CreateUserHandler(
-	ctx context.Context,
-	in *userpb.CreateUserRequest,
-) (*userpb.CreateUserResponse, error) {
-	userID, err := u.svc.CreateUser(ctx, models.UserCreateParams{
-		Username: in.User.Username,
-		Email:    in.User.Email,
-		Password: in.User.Password,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &userpb.CreateUserResponse{
-		Id: int32(userID),
-	}, nil
 }
 
 func (u *UserDelivery) AuthUserHandler(
@@ -105,7 +81,7 @@ func (u *UserDelivery) SendFriendRequestHandler(
 ) (*userpb.FriendResponse, error) {
 	sender, ok := ctx.Value(tokenKey{}).(*models.UserClaims)
 	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "invalid claims")
+		return nil, status.Error(codes.Unauthenticated, "invalid claims")
 	}
 
 	if err := u.svc.SendFriendRequest(ctx, sender.ID, int(in.ReceiverId)); err != nil {
@@ -115,6 +91,32 @@ func (u *UserDelivery) SendFriendRequestHandler(
 	return &userpb.FriendResponse{
 		IsSended: true,
 	}, nil
+}
+
+func (u *UserDelivery) UpdateFriendRequestHandler(
+	ctx context.Context,
+	in *userpb.UpdateFriendRequest,
+) (*emptypb.Empty, error) {
+	sender, ok := ctx.Value(tokenKey{}).(*models.UserClaims)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "invalid claims")
+	}
+
+	var err error
+
+	switch {
+	case in.Status == 0:
+		err = u.svc.DeclineFriendRequest(ctx, sender.ID, int(in.ReceiverId))
+	case in.Status == 1:
+		err = u.svc.AcceptFriendRequest(ctx, sender.ID, int(in.ReceiverId))
+	default:
+		return nil, status.Error(codes.InvalidArgument, "invalid request status")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &emptypb.Empty{}, nil
 }
 
 func (u *UserDelivery) AuthFuncOverride(ctx context.Context, fullMethodName string) (context.Context, error) {

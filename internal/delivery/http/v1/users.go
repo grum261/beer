@@ -2,9 +2,9 @@ package v1
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -26,25 +26,20 @@ type UserHandler struct {
 	v           *validator.Validate
 }
 
-func NewUserHandler(svc UserService, jwtCfg configs.JWTConfig, maxFileSize int64) *UserHandler {
+func NewUserHandler(svc UserService, m *minio.Client, jwtCfg configs.JWTConfig, maxFileSize int64) *UserHandler {
 	return &UserHandler{
 		svc:         svc,
-		m:           &minio.Client{},
+		m:           m,
 		maxFileSize: maxFileSize,
 		jwtCfg:      jwtCfg,
 		v:           validator.New(),
 	}
 }
 
-func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r http.Request, params map[string]string) {
-	enc := json.NewEncoder(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if err := r.ParseMultipartForm(h.maxFileSize); err != nil {
-		_ = enc.Encode(map[string]string{
-			"error": err.Error(),
-		})
-		w.WriteHeader(http.StatusBadRequest)
+func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	err := r.ParseMultipartForm(h.maxFileSize)
+	if err != nil {
+		writeUnprocessable(w, err)
 		return
 	}
 
@@ -54,11 +49,8 @@ func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r http.Request, pa
 		Password: r.FormValue("password"),
 	}
 
-	if err := h.v.StructCtx(r.Context(), p); err != nil {
-		_ = enc.Encode(map[string]string{
-			"error": err.Error(),
-		})
-		w.WriteHeader(http.StatusBadRequest)
+	if err = h.v.StructCtx(r.Context(), p); err != nil {
+		writeUnprocessable(w, err)
 		return
 	}
 
@@ -69,37 +61,28 @@ func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r http.Request, pa
 	f, header, err := r.FormFile("image")
 	if err != nil {
 		if !errors.Is(err, http.ErrMissingFile) {
-			_ = enc.Encode(map[string]string{
-				"error": err.Error(),
-			})
-			w.WriteHeader(http.StatusBadRequest)
+			writeUnprocessable(w, err)
 			return
 		}
 	}
 	if f != nil {
 		info, err := h.m.PutObject(
-			r.Context(), "users", "avatars/"+p.Username,
+			r.Context(), "users", filepath.Join("avatars", p.Username, header.Filename),
 			f, header.Size, minio.PutObjectOptions{},
 		)
 		if err != nil {
-			_ = enc.Encode(map[string]string{
-				"error": err.Error(),
-			})
-			w.WriteHeader(http.StatusInternalServerError)
+			writeInternal(w, err)
 			return
 		}
 
-		p.Avatar = &info.Location
+		p.Avatar = &info.Key
 
 		f.Close()
 	}
 
 	userID, err := h.svc.CreateUser(r.Context(), p)
 	if err != nil {
-		_ = enc.Encode(map[string]string{
-			"error": err.Error(),
-		})
-		w.WriteHeader(http.StatusInternalServerError)
+		writeInternal(w, err)
 		return
 	}
 
@@ -114,17 +97,13 @@ func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r http.Request, pa
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(h.jwtCfg.Secret))
 	if err != nil {
-		_ = enc.Encode(map[string]string{
-			"error": err.Error(),
-		})
-		w.WriteHeader(http.StatusInternalServerError)
+		writeUnauthorized(w, err)
 		return
 	}
 
-	_ = enc.Encode(map[string]interface{}{
+	writeOK(w, map[string]interface{}{
 		"userID":      userID,
 		"accessToken": tokenString,
 		"avatar":      *p.Avatar,
 	})
-	w.WriteHeader(http.StatusCreated)
 }

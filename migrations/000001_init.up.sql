@@ -1,20 +1,22 @@
 CREATE TABLE users (
     id int PRIMARY KEY generated always AS identity,
-    username varchar(50) UNIQUE NOT NULL,
-    email varchar(255) UNIQUE NOT NULL,
-    avatar varchar(255) UNIQUE,
+    username varchar(50) NOT NULL,
+    email varchar(255) NOT NULL,
+    avatar varchar(255),
     bio varchar(500),
-    password_hash varchar(255) NOT NULL
+    password_hash varchar(255) NOT NULL,
+    UNIQUE(avatar, username, email)
 );
 
 CREATE TABLE users_friends_requests (
     user_sender_id int NOT NULL REFERENCES users,
-    user_reciever_id int NOT NULL REFERENCES users,
-    sended_at timestamp NOT NULL DEFAULT NOW(),
+    user_receiver_id int NOT NULL REFERENCES users,
+    sent_at timestamp NOT NULL DEFAULT NOW(),
+    updated_at timestamp NOT NULL DEFAULT NOW(),
     request_status int NOT NULL CHECK (request_status IN (0, 1, 2, 3))
 );
 
-CREATE UNIQUE INDEX uq_idx_users_id ON users_friends_requests (user_sender_id, user_reciever_id);
+CREATE UNIQUE INDEX uq_idx_users_id ON users_friends_requests (user_sender_id, user_receiver_id);
 
 CREATE INDEX ON users_friends_requests (request_status);
 
@@ -23,6 +25,7 @@ CREATE TABLE breweries (
     name varchar(255) UNIQUE NOT NULL,
     description varchar(1000),
     founded_at timestamp NOT NULL,
+    founder_id int NOT NULL REFERENCES users,
     created_at timestamp NOT NULL DEFAULT NOW(),
     updated_at timestamp NOT NULL DEFAULT NOW()
 );

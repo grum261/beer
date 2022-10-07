@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package proto.brewery;
+
+import "proto/google/api/annotations.proto";
+import "proto/google/type/datetime.proto";
+
+option go_package = "github.com/grum261/beer/proto/brewerypb";
+
+message CreateBreweryRequest {
+    string name = 1;
+    string description = 2;
+    google.type.DateTime founded_at = 3;
+}
+
+message CreateBreweryRespone {
+    int32 id = 1;
+}
+
+service BreweryDeliveryService {
+    rpc CreateBrewery(CreateBreweryRequest) returns (CreateBreweryRespone) {
+        option (google.api.http) = {
+            post: "/api/v1/breweries"
+            body: "*"
+        };
+    }
+}
